@@ -6,9 +6,15 @@ get assets (add new content pack)
 
 First Person
 
+Flying
+
 Rolling
 
 Third Person
+
+Top Down
+
+2D Side Scroller
 
 Vehicle
 
