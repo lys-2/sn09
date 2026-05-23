@@ -1,0 +1,73 @@
+state
+ sleep
+ lay
+ idle
+ walk
+ run
+ sit
+ talk
+ jump
+ scooter
+ bike
+
+class
+ fighter
+ mage
+ rogue
+
+action
+ move
+ select
+ use
+ jump
+ talk
+ mount
+ rest
+ take
+ drop
+ buy
+ rent
+ accept_
+
+item
+ base_set
+ phone
+ cube
+ scooter
+ bike
+ e-bike
+ d_box
+ cart
+ mcard
+ stick
+ coin
+ noodles
+ wheat
+ veg
+ fruit
+ bottle
+ potion
+
+char
+ vendor
+ dummy
+
+location
+ street
+ clinic
+ employer
+ dungeon
+ block
+ flat
+
+task
+ cubes|4|4|cube|0|3|vendor|vendor
+  ~Find, pick up and deliver
+ path|5|5| |0|3|vendor
+  ~Follow waypoints
+
+scene
+ day 1
+ day2 90
+ player
+  coin 20000
