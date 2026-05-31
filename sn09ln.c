@@ -294,6 +294,10 @@ void init() {
     text = append("mc-windows/mcat.exe");
     s.scene[slot].path = text;
 
+    slot = spawn((struct node) { "wsp", button, .x = 234, .y = 66, 36, 24 });
+    text = append("store/sn0901.exe");
+    s.scene[slot].path = text;
+
     ExtractIconExA("mc-windows/mcat.exe", 0, &hLarge, &hSmall, 1);
 
 };
