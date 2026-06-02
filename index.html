@@ -1,0 +1,128 @@
+
+<!DOCTYPE html>
+<html lang="en">
+ <title> Role Places </title>
+  <head>
+    <meta name="csrf-token" content="WDkgGXsKS3U0BCBIX15XPEoWPmoBJDUK6zOqMa83RMixr9gp0Za8YvCs">
+  </head>
+  <body>
+    <a href="/">H</a>
+ <a name="home"></a>
+ <a href="/gamesn.exe">gamesn.exe</a>
+ <a name="win_game"></a>
+
+
+
+<span>1::User</span>
+<span> @sname @date @uptime users:4/128; online:1/32; scene:32/1024; </span>
+<p><mark>Player[L3]</mark> 30<sup>30</sup>hp 10/10ap idle H/M/a22/w80/h175 </p>
+<p>CH:player2[L2] 20/20hp 10/10ap idle C/F/a19/w70/h170 </p>
+<p>scene: </p>
+<p>map: </p>
+<img src="grass.png" alt="Italian Trulli">
+<br>
+<span>chat: </span>
+<span>Player|Street|1m| Hello!</span>
+
+
+<form action="/login" method="post">
+  <input type="submit" value="login">
+  <label for="name">name</label>
+  <input type="text" id="name" name="name">
+  <label for="pw">pw</label>
+  <input type="password" id="pw" name="pw">
+
+</form>
+
+<form action="/user" method="post">
+  <input type="submit" value="reg">
+  <label for="name">name</label>
+  <input type="text" id="name" name="name">
+  <label for="pw">pw</label>
+  <input type="password" id="pw" name="pw">
+    <label for="token">token</label>
+  <input type="text" id="token" name="token">
+
+</form>
+
+<form action="/char" method="post">
+
+  <input type="submit" value="create">
+  <label for="race"> race:</label>
+  <select id="race" name="race">
+    <option value="human">human</option>
+    <option value="dwarf">dwarf</option>
+    <option value="cat-like">cat-like</option>
+  </select>
+
+  <label for="class"> class:</label>
+  <select id="class" name="class">
+    <option value="fighter">fighter</option>
+    <option value="mage">mage</option>
+    <option value="rogue">rogue</option>
+  </select>
+
+<label for="gen">gen:</label>
+  <select id="gen" name="gen">
+    <option value="m">m</option>
+    <option value="f">f</option>
+  </select>
+
+  <label for="age">age (14-60)</label>
+  <input type="range" id="age" name="age" min="14" max="60" value="19">
+  <label for="weight">weight (50-130)</label>
+  <input type="range" id="weight" name="weight" min="50" max="130" value="70">
+    <label for="height">height (133-195)</label>
+  <input type="range" id="height" name="height" min="133" max="195" value="170">
+</form>
+
+<form action="/say">
+  <input type="submit" value="say">
+  <label for="msg"></label>
+  <input type="text" id="msg" name="msg">
+
+</form>
+
+<form action="/select">
+  <input type="submit" value="select">
+</form>
+
+<form action="/spawn">
+  <input type="submit" value="spawn">
+  <label for="type"> type:</label>
+  <select id="type" name="type">
+    <option value="ball">ball</option>
+    <option value="box">box</option>
+  </select>
+
+  <label for="place"> place:</label>
+  <select id="place" name="place">
+    <option value="fighter">house</option>
+    <option value="mage">yard</option>
+    <option value="rogue">street</option>
+  </select>
+
+</form>
+
+<form action="/move">
+  <input type="submit" value="move">
+  <label for="place"> place:</label>
+  <select id="place" name="place">
+    <option value="room">room</option>
+    <option value="house">house</option>
+    <option value="yard">yard</option>
+    <option value="street">street</option>
+  </select>
+</form>
+
+<form action="/mount">
+  <input type="submit" value="mount">
+</form>
+
+<form action="/emote">
+  <input type="submit" value="emote">
+</form>
+
+<hr>
+  </body>
+</html>
