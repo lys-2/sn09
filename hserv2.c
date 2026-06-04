@@ -1,369 +1,227 @@
-/*
- * ram_http_server.c – preloads files from the 'www' directory into memory at startup.
- *
- * Compile: gcc -O2 ram_http_server.c -o ram_server
- * Run:     ./ram_server
- */
-
-#define _GNU_SOURCE
-#include <dirent.h>
-#include <errno.h>
-#include <fcntl.h>
+#define _GNU_SOURCE        // for getnameinfo()
+#include <sys/socket.h>
 #include <netinet/in.h>
-#include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <dirent.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/epoll.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <time.h>
-#include <unistd.h>
+#include <errno.h>
 
-#define PORT            80
-#define ROOT_DIR        "www"
-#define MAX_EVENTS      1024
-#define BUFFER_SIZE     4096
-#define MAX_PATH        1024
-#define KEEPALIVE_TIMEOUT 5
+// ------------------------------------------------------------------
+//  Data structures (buffers enlarged to safe sizes)
+// ------------------------------------------------------------------
+#define MAX_PATH_LEN    1024
 
-/* ---------- memory cache ---------- */
 
-typedef struct cache_entry {
-    char *path;               /* relative path from root, e.g. "/index.html" */
-    char *data;               /* file content */
-    size_t size;              /* length of data */
-    char mime[64];            /* content type */
-    struct cache_entry *next;
-} cache_entry_t;
+struct folder {
+    char name[256];
+    char path[MAX_PATH_LEN];
+};
 
-static cache_entry_t *cache_head = NULL;   /* linked list for simplicity */
+struct file {
+    char name[256];
+    char path[MAX_PATH_LEN];
+    char sum;                      // unused, kept for compatibility
+    long long len;
+    long long cur;                 // offset into s.data
+};
 
-/* quick MIME lookup */
-static const char *get_mime(const char *filename) {
-    const char *ext = strrchr(filename, '.');
+struct state {
+    struct file   files[123];
+    struct folder folders[123];
+    char          data[123456];
+    long long     data_cur;
+    int           files_cur;
+    int           folders_cur;
+};
+struct state s;
+
+// ------------------------------------------------------------------
+//  MIME type helper (unchanged)
+// ------------------------------------------------------------------
+char* get_mime_type(const char* filename) {
+    const char* ext = strrchr(filename, '.');
     if (!ext) return "application/octet-stream";
-    if (!strcmp(ext, ".html") || !strcmp(ext, ".htm")) return "text/html";
-    if (!strcmp(ext, ".css"))  return "text/css";
-    if (!strcmp(ext, ".js"))   return "application/javascript";
-    if (!strcmp(ext, ".json")) return "application/json";
-    if (!strcmp(ext, ".png"))  return "image/png";
-    if (!strcmp(ext, ".jpg") || !strcmp(ext, ".jpeg")) return "image/jpeg";
-    if (!strcmp(ext, ".gif"))  return "image/gif";
-    if (!strcmp(ext, ".svg"))  return "image/svg+xml";
-    if (!strcmp(ext, ".ico"))  return "image/x-icon";
-    if (!strcmp(ext, ".txt"))  return "text/plain";
+    if (strcmp(ext, ".html") == 0 || strcmp(ext, ".htm") == 0) return "text/html";
+    if (strcmp(ext, ".css") == 0)  return "text/css";
+    if (strcmp(ext, ".js") == 0)   return "application/javascript";
+    if (strcmp(ext, ".json") == 0) return "application/json";
+    if (strcmp(ext, ".png") == 0)  return "image/png";
+    if (strcmp(ext, ".jpg") == 0 || strcmp(ext, ".jpeg") == 0) return "image/jpeg";
+    if (strcmp(ext, ".gif") == 0)  return "image/gif";
+    if (strcmp(ext, ".svg") == 0)  return "image/svg+xml";
+    if (strcmp(ext, ".ico") == 0)  return "image/x-icon";
+    if (strcmp(ext, ".txt") == 0)  return "text/plain";
+    if (strcmp(ext, ".pdf") == 0)  return "application/pdf";
+    if (strcmp(ext, ".zip") == 0)  return "application/zip";
     return "application/octet-stream";
 }
 
-/* read entire file into a buffer; returns NULL on failure */
-static char *read_file(const char *fullpath, size_t *size) {
-    FILE *f = fopen(fullpath, "rb");
-    if (!f) return NULL;
-    fseek(f, 0, SEEK_END);
-    long len = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    char *buf = malloc(len + 1);
-    if (!buf) { fclose(f); return NULL; }
-    fread(buf, 1, len, f);
-    fclose(f);
-    buf[len] = '\0';
-    *size = len;
-    return buf;
-}
+// ------------------------------------------------------------------
+int main() {
+    FILE* f;
+    DIR* dir;
+    struct dirent* ent;
+    struct stat st;
+    long len;
+    long long totalBytes;
 
-/* recursively load files from a directory into the cache */
-static void load_directory(const char *base, const char *rel) {
-    char full[MAX_PATH];
-    snprintf(full, sizeof(full), "%s/%s", base, rel[0] ? rel : ".");
+    // --- scan store/ directory ---
+    const char* storeDir = "store";
+    dir = opendir(storeDir);
+    if (!dir) {
+        perror("opendir store");
+        return 1;
+    }
 
-    DIR *dir = opendir(full);
-    if (!dir) return;
-
-    struct dirent *ent;
     while ((ent = readdir(dir)) != NULL) {
-        if (ent->d_name[0] == '.') continue;   /* skip . and .. and hidden */
-        char child_rel[MAX_PATH], child_full[MAX_PATH];
-        snprintf(child_rel, sizeof(child_rel), "%s%s%s",
-                 rel, rel[0] ? "/" : "", ent->d_name);
-        snprintf(child_full, sizeof(child_full), "%s/%s", full, ent->d_name);
+        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
+            continue;
 
-        struct stat st;
-        if (stat(child_full, &st) == -1) continue;
+        // build full path safely
+        char fullPath[MAX_PATH_LEN];
+        snprintf(fullPath, sizeof(fullPath), "%s/%s", storeDir, ent->d_name);
+
+        if (stat(fullPath, &st) != 0) {
+            fprintf(stderr, "stat failed for %s\n", fullPath);
+            continue;
+        }
+
         if (S_ISDIR(st.st_mode)) {
-            load_directory(base, child_rel);   /* recurse */
-        } else if (S_ISREG(st.st_mode)) {
-            size_t fsize;
-            char *data = read_file(child_full, &fsize);
-            if (!data) continue;
+            // directory
+            strncpy(s.folders[s.folders_cur].name, ent->d_name, 256 - 1);
+            strncpy(s.folders[s.folders_cur].path, storeDir, MAX_PATH_LEN - 1);
+            s.folders_cur++;
+            printf("[DIR]  %s P %s\n", ent->d_name, storeDir);
+        }
+        else {
+            // regular file
+            totalBytes = (long long)st.st_size;
 
-            cache_entry_t *entry = malloc(sizeof(cache_entry_t));
-            entry->path = strdup(child_rel);   /* always starts with "/" */
-            entry->data = data;
-            entry->size = fsize;
-            snprintf(entry->mime, sizeof(entry->mime), "%s", get_mime(ent->d_name));
-            entry->next = cache_head;
-            cache_head = entry;
-            printf("Cached: %s (%zu bytes)\n", entry->path, entry->size);
+            // store file info
+            s.files[s.files_cur].len = totalBytes;
+            s.files[s.files_cur].cur = s.data_cur;
+            strncpy(s.files[s.files_cur].name, ent->d_name, 256 - 1);
+            strncpy(s.files[s.files_cur].path, fullPath, MAX_PATH_LEN - 1);
+
+            printf("[FILE] %s %lld p %s\n", ent->d_name, totalBytes, storeDir);
+
+            // read file into s.data
+            f = fopen(fullPath, "rb");
+            if (f) {
+                fseek(f, 0, SEEK_END);
+                len = ftell(f);
+                fseek(f, 0, SEEK_SET);
+                if (s.data_cur + len <= sizeof(s.data)) {
+                    fread(&s.data[s.data_cur], 1, len, f);
+                    s.data_cur += len;
+                }
+                else {
+                    fprintf(stderr, "Out of memory for file %s\n", fullPath);
+                }
+                fclose(f);
+            }
+            s.files_cur++;
         }
     }
     closedir(dir);
-}
 
-/* find entry by request path; returns NULL if not found */
-static cache_entry_t *cache_lookup(const char *path) {
-    for (cache_entry_t *e = cache_head; e; e = e->next)
-        if (!strcmp(e->path, path)) return e;
-    return NULL;
-}
-
-/* ---------- connection state ---------- */
-
-typedef enum { READING_REQUEST, SENDING_MEM } conn_state;
-
-typedef struct {
-    int fd;
-    conn_state state;
-    char rbuf[BUFFER_SIZE];
-    size_t rpos;
-    cache_entry_t *file_entry;   /* current file being sent */
-    size_t sent;                 /* bytes already sent */
-    time_t last_active;
-} client_t;
-
-static client_t *clients[MAX_EVENTS] = {0};
-
-/* set non‑blocking */
-static int set_nonblocking(int fd) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0) return -1;
-    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-}
-
-/* send an HTTP error and close connection */
-static void send_error(int epfd, client_t *cli, int code, const char *msg) {
-    char body[256];
-    snprintf(body, sizeof(body), "<html><body><h1>%d %s</h1></body></html>", code, msg);
-    char header[512];
-    snprintf(header, sizeof(header),
-             "HTTP/1.1 %d %s\r\n"
-             "Content-Type: text/html\r\n"
-             "Content-Length: %zu\r\n"
-             "Connection: close\r\n\r\n",
-             code, msg, strlen(body));
-    send(cli->fd, header, strlen(header), MSG_NOSIGNAL);
-    send(cli->fd, body, strlen(body), MSG_NOSIGNAL);
-    close(cli->fd);
-    epoll_ctl(epfd, EPOLL_CTL_DEL, cli->fd, NULL);
-    clients[cli->fd] = NULL;
-    free(cli);
-}
-
-/* start sending a cached file */
-static void start_mem_send(int epfd, client_t *cli, cache_entry_t *entry) {
-    char header[512];
-    snprintf(header, sizeof(header),
-             "HTTP/1.1 200 OK\r\n"
-             "Content-Type: %s\r\n"
-             "Content-Length: %zu\r\n"
-             "Connection: keep-alive\r\n\r\n",
-             entry->mime, entry->size);
-    send(cli->fd, header, strlen(header), MSG_NOSIGNAL);
-
-    cli->state = SENDING_MEM;
-    cli->file_entry = entry;
-    cli->sent = 0;
-}
-
-/* process a complete request (headers end with \r\n\r\n) */
-static void process_request(int epfd, client_t *cli) {
-    char method[16], path[MAX_PATH];
-    if (sscanf(cli->rbuf, "%15s %1023s", method, path) != 2) {
-        send_error(epfd, cli, 400, "Bad Request");
-        return;
-    }
-    if (strcmp(method, "GET") != 0) {
-        send_error(epfd, cli, 501, "Not Implemented");
-        return;
+    // second sanitisation loop (original behaviour)
+    for (int i = 0; i < s.data_cur; i++) {
+        if (!s.data[i])      s.data[i] = 222;
+        if (s.data[i] == 7)  s.data[i] = 223;
+        if (s.data[i] == 27) s.data[i] = 221;
     }
 
-    /* decode %xx and block traversal */
-    char decoded[MAX_PATH];
-    int j = 0;
-    for (int i = 0; path[i] && j < MAX_PATH-1; i++) {
-        if (path[i] == '%' && path[i+1] && path[i+2]) {
-            int hex;
-            if (sscanf(path+i+1, "%2x", &hex) == 1) {
-                decoded[j++] = (char)hex;
-                i += 2;
-                continue;
-            }
-        }
-        decoded[j++] = path[i];
-    }
-    decoded[j] = '\0';
-    if (strstr(decoded, "..")) {
-        send_error(epfd, cli, 403, "Forbidden");
-        return;
-    }
-    if (strcmp(decoded, "/") == 0)
-        strcpy(decoded, "/index.html");
+    printf("SIZE %lld FL%i DIR%i\n", s.data_cur, s.files_cur, s.folders_cur);
 
-    cache_entry_t *entry = cache_lookup(decoded);
-    if (!entry) {
-        send_error(epfd, cli, 404, "Not Found");
-        return;
-    }
-    start_mem_send(epfd, cli, entry);
-}
-
-/* ---------- event handlers ---------- */
-
-static void handle_read(int epfd, client_t *cli) {
-    ssize_t n = recv(cli->fd, cli->rbuf + cli->rpos,
-                     sizeof(cli->rbuf) - cli->rpos, 0);
-    if (n <= 0) {
-        close(cli->fd);
-        epoll_ctl(epfd, EPOLL_CTL_DEL, cli->fd, NULL);
-        clients[cli->fd] = NULL;
-        free(cli);
-        return;
-    }
-    cli->rpos += n;
-    cli->rbuf[cli->rpos] = '\0';
-    cli->last_active = time(NULL);
-
-    if (strstr(cli->rbuf, "\r\n\r\n"))
-        process_request(epfd, cli);
-}
-
-static void handle_write(int epfd, client_t *cli) {
-    cli->last_active = time(NULL);
-    cache_entry_t *entry = cli->file_entry;
-    while (cli->sent < entry->size) {
-        ssize_t ret = send(cli->fd,
-                           entry->data + cli->sent,
-                           entry->size - cli->sent,
-                           MSG_NOSIGNAL);
-        if (ret > 0) {
-            cli->sent += ret;
-        } else if (ret == -1 && errno == EAGAIN) {
-            /* re‑arm EPOLLOUT and try later */
-            struct epoll_event ev;
-            ev.events = EPOLLOUT | EPOLLIN | EPOLLET;
-            ev.data.ptr = cli;
-            epoll_ctl(epfd, EPOLL_CTL_MOD, cli->fd, &ev);
-            return;
-        } else {
-            send_error(epfd, cli, 500, "Internal Error");
-            return;
-        }
+    // print first 5 bytes of first 6 files (debug)
+    for (int i = 0; i < 6 && i < s.files_cur; i++) {
+        printf("%.5s\n", s.data + s.files[i].cur);
     }
 
-    /* file completely sent – reset for keep‑alive */
-    cli->state = READING_REQUEST;
-    cli->rpos = 0;
-    memset(cli->rbuf, 0, sizeof(cli->rbuf));
+    // ------------------------------------------------------------------
+    //  HTTP server (Linux sockets)
+    // ------------------------------------------------------------------
+#define PORT            80
+#define BUFFER_SIZE     4096
 
-    struct epoll_event ev;
-    ev.events = EPOLLIN | EPOLLET;
-    ev.data.ptr = cli;
-    epoll_ctl(epfd, EPOLL_CTL_MOD, cli->fd, &ev);
-}
+    int listen_sock, client_sock;
+    struct sockaddr_in addr, client_addr;
+    socklen_t client_addr_len = sizeof(client_addr);
 
-static void timeout_check(int epfd) {
-    time_t now = time(NULL);
-    for (int i = 0; i < MAX_EVENTS; i++) {
-        client_t *cli = clients[i];
-        if (!cli) continue;
-        if (now - cli->last_active > KEEPALIVE_TIMEOUT) {
-            close(cli->fd);
-            epoll_ctl(epfd, EPOLL_CTL_DEL, cli->fd, NULL);
-            clients[cli->fd] = NULL;
-            free(cli);
-        }
+    listen_sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (listen_sock < 0) {
+        perror("socket");
+        return 1;
     }
-}
-
-/* ---------- main ---------- */
-
-int main() {
-    /* 1. load all files into memory */
-    printf("Loading files from '%s'...\n", ROOT_DIR);
-    load_directory(ROOT_DIR, "");
-    printf("Cache ready, %d files loaded.\n", (int)(cache_head ? 1 : 0)); /* quick count omitted */
-
-    /* 2. create listening socket */
-    int listen_sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (listen_sock < 0) { perror("socket"); return 1; }
 
     int opt = 1;
     setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    setsockopt(listen_sock, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
 
-    struct sockaddr_in addr = {
-        .sin_family = AF_INET,
-        .sin_addr.s_addr = INADDR_ANY,
-        .sin_port = htons(PORT)
-    };
-    bind(listen_sock, (struct sockaddr*)&addr, sizeof(addr));
-    listen(listen_sock, SOMAXCONN);
-    set_nonblocking(listen_sock);
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(PORT);
 
-    int epfd = epoll_create1(0);
-    struct epoll_event ev;
-    ev.events = EPOLLIN | EPOLLET;
-    ev.data.fd = listen_sock;
-    epoll_ctl(epfd, EPOLL_CTL_ADD, listen_sock, &ev);
+    if (bind(listen_sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("bind");
+        close(listen_sock);
+        return 1;
+    }
 
-    printf("RAM server listening on port %d\n", PORT);
+    if (listen(listen_sock, SOMAXCONN) < 0) {
+        perror("listen");
+        close(listen_sock);
+        return 1;
+    }
 
-    struct epoll_event events[MAX_EVENTS];
+    printf("HTTP server listening on port %d, serving 'store'\n", PORT);
+
+    int resp = 0;
     while (1) {
-        int nfds = epoll_wait(epfd, events, MAX_EVENTS, 1000);
-        if (nfds < 0 && errno != EINTR) break;
-
-        for (int i = 0; i < nfds; i++) {
-            if (events[i].data.fd == listen_sock) {
-                while (1) {
-                    struct sockaddr_in client_addr;
-                    socklen_t len = sizeof(client_addr);
-                    int cfd = accept4(listen_sock, (struct sockaddr*)&client_addr, &len,
-                                      SOCK_NONBLOCK);
-                    if (cfd == -1) break;
-
-                    int tcp_nodelay = 1;
-                    setsockopt(cfd, IPPROTO_TCP, TCP_NODELAY, &tcp_nodelay, sizeof(tcp_nodelay));
-
-                    client_t *cli = calloc(1, sizeof(client_t));
-                    cli->fd = cfd;
-                    cli->state = READING_REQUEST;
-                    cli->last_active = time(NULL);
-
-                    ev.events = EPOLLIN | EPOLLET;
-                    ev.data.ptr = cli;
-                    epoll_ctl(epfd, EPOLL_CTL_ADD, cfd, &ev);
-                    clients[cfd] = cli;
-                }
-            } else {
-                client_t *cli = (client_t*)events[i].data.ptr;
-                if (events[i].events & (EPOLLERR | EPOLLHUP)) {
-                    close(cli->fd);
-                    epoll_ctl(epfd, EPOLL_CTL_DEL, cli->fd, NULL);
-                    clients[cli->fd] = NULL;
-                    free(cli);
-                    continue;
-                }
-                if (events[i].events & EPOLLIN && cli->state == READING_REQUEST)
-                    handle_read(epfd, cli);
-                if (events[i].events & EPOLLOUT && cli->state == SENDING_MEM)
-                    handle_write(epfd, cli);
-            }
+        client_sock = accept(listen_sock, (struct sockaddr*)&client_addr, &client_addr_len);
+        if (client_sock < 0) {
+            perror("accept");
+            continue;
         }
-        timeout_check(epfd);
+
+        char host[NI_MAXHOST], service[NI_MAXSERV];
+        if (getnameinfo((struct sockaddr*)&client_addr, client_addr_len,
+            host, sizeof(host), service, sizeof(service),
+            NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
+            printf("Connection from %s:%s\n", host, service);
+        }
+
+        char request[BUFFER_SIZE];
+        ssize_t recv_len = recv(client_sock, request, sizeof(request) - 1, 0);
+        if (recv_len > 0) {
+            request[recv_len] = '\0';
+            printf("asd!!! %i[%s]\n %s\n", resp, host, request);
+        }
+
+        // hard‑coded response (same as original)
+        char header[] =
+            "HTTP/1.0 200 OK\r\n"
+            "Content-Type: text/html\r\n"
+            "Content-Length: 3483\r\n"
+            "Server: snrv\r\n"
+            "\r\n";
+        send(client_sock, header, strlen(header), 0);
+
+        // send the fourth file (index 3) if it exists
+        if (s.files_cur > 3) {
+            send(client_sock, &s.data[s.files[1].cur], 3483, 0);
+        }
+
+        close(client_sock);
+        resp++;
     }
 
     close(listen_sock);
-    close(epfd);
     return 0;
 }
