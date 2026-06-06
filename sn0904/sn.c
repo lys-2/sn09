@@ -14,6 +14,30 @@ void spawn(struct node n) {
     s.scene_cur++;
 }
 
+void move(int x, int y) {
+    
+    struct color c;
+    if (s.pick.a == 0) c = hsv_to_rgb(rand() % 360, 1, 1);
+    else c = s.pick;
+
+    spawn((struct node) {
+        ( struct v2) { s.mx, s.my },
+            .c = c,
+            .sx = 2 + rand() % 7,
+            .is_linked = 8==rand()%11,
+            .la = rand() % 111,
+            .v.x = (111/2-rand()%111)/111.,
+            .v.y =  (111/2-rand()%111)/111.,
+            .a = (111/2-rand()%111)/11111.,
+            .rot = line_angle_rad(
+                (struct v2) { s.mx, s.my},
+                (struct v2) {  x, y   }
+            ) });
+    s.mx = x;
+    s.my = y;
+    s.actions++;
+};
+
 void point(struct frame f, int x, int y, struct color c) {
     if (x >= 0 && x < f.width && y >= 0 && y < f.height) {
         f.pixels[0 + (x + y * f.width) * 4] = c.b;
@@ -31,16 +55,65 @@ struct color pick(struct frame f, int x, int y, int id) {
 }
 
 void paint(struct frame f, int id) {
+
+    if (id == 0) {
+        colors(f, id);
+    }
+    if (id == 2) {
+        for (int i = 0; i < f.width * f.height; i++) {
+            int x = i % f.width;
+            f.pixels[1 % 4 + i * 4] = (255-(x % 32)*8)/3;
+        }
+        circle(f, (struct v2) { fmod(s.t/4.,1.)*32*16, 16 },
+            orange, 11);
+        circle(f, (struct v2) { fmod(s.t / 512., 1.) * 32 * 16, 4 },
+            red, 2);
+        ring2(f, (struct v2) { fmod(s.t / 64., 1.) * 32 * 16, 8 },
+            cyan, 4);
+    }
+    if (id == 1) 
+    {
+
     for (int i = 0; i < f.width * f.height; i++) {
         int y = i / f.width;
         int x = i % f.width;
-        f.pixels[id % 4 + i * 4] += x % 133;
+        f.pixels[1 % 4 + i * 4] = (x%7)*2;
+        f.pixels[1 % 4 + i * 4] += (x%11)*3;
+        f.pixels[0 + i * 4] = (y%13)*2;
+        f.pixels[0 + i * 4] += (y%17)*3;
     }
     for (int i = 0; i < 123; i++) {
-        point(f, s.scene[i].t.x, s.scene[i].t.y, s.scene[i].c);
-        ring2(f, (struct v2) { s.scene[i].t.x, s.scene[i].t.y }, s.scene[i].c, 5);
+        if (!s.scene[i].is_linked) continue;
+        line(f, 
+            (struct v2) { s.scene[i].t.x, s.scene[i].t.y },
+            (struct v2) { 
+            s.scene[s.scene[i].la].t.x,
+            s.scene[s.scene[i].la].t.y
+        },
+            (struct v2) { 0, 0 },
+            blue,
+            0
+            );
     }
+    for (int i = 0; i < 123; i++) {
+        if (!s.scene[i].is_spawned) continue;
 
+        point(f, s.scene[i].t.x, s.scene[i].t.y, s.scene[i].c);
+        circle(f, (struct v2) { s.scene[i].t.x, s.scene[i].t.y },
+            s.scene[i].c, s.scene[i].sx);
+    }
+        for (int i = 0; i < 123; i++) {
+            if (!s.scene[i].is_spawned) continue;
+
+        line(f, 
+            (struct v2) { s.scene[i].t.x, s.scene[i].t.y },
+            (struct v2) { s.scene[i].t.x+ s.scene[i].sx*2, s.scene[i].t.y },
+            (struct v2) { s.scene[i].t.x, s.scene[i].t.y },
+            white,
+            s.scene[i].rot
+            );
+    }
+        }
 }
 void colors(struct frame f, int id) {
     for (int i = 0; i < f.width * f.height; i++) {
@@ -75,15 +148,20 @@ struct v2 rot(struct v2 a, float r) {
             a.x* sin(r) + a.y * cos(r)
     };
 }
+
+float line_angle_rad(struct v2 a, struct v2 b) {
+    return atan2f(b.y - a.y, b.x - a.x);
+}
+
 struct v2 rot_or(struct v2 a, struct v2 o, float r) {
     a = rot((struct v2) { a.x - o.x, a.y - o.y }, r);
     return   (struct v2) { a.x + o.x, a.y + o.y };
 }
 
-void draw_line(struct frame f, struct v2 a, struct v2 b, struct v2 o,
-    struct color c, float r) {
-    a = rot_or(a, o, r);
-    b = rot_or(b, o, r);
+void line(struct frame f, struct v2 a, struct v2 b, struct v2 o,
+    struct color c, float an) {
+    a = rot_or(a, o, an);
+    b = rot_or(b, o, an);
     int d = dist(a, b);
     for (int i = 0; i <= d; i++) {
         point(f,
@@ -100,16 +178,21 @@ void ring(struct frame f, struct v2 a,
     }
 }
 void ring2(struct frame f, struct v2 centre, struct color c, float radius) {
-    for (int deg = 0; deg < 360; deg++) {
-        float rad = deg * 3.14159265f / 180.0f;
+    for (int deg = 0; deg < (int)radius*16; deg++) {
+        float rad = deg;
         int x = centre.x + (int)(radius * cos(rad));
         int y = centre.y + (int)(radius * sin(rad));
         point(f, x, y, c);
     }
 }
+void circle(struct frame f, struct v2 centre, struct color c, float radius) {
+    for (int i = 1; i < 4; i++) {
+        ring2(f, centre, c, radius/i);
+    }
+}
 
 // Bresenham's line – integer only
-void draw_line2(struct frame f, struct v2 a, struct v2 b, struct v2 o, struct color c, float r) {
+void line2(struct frame f, struct v2 a, struct v2 b, struct v2 o, struct color c, float r) {
     a = rot_or(a, o, r);
     b = rot_or(b, o, r);
     int x0 = (int)a.x, y0 = (int)a.y;
@@ -132,7 +215,7 @@ void tri(struct frame f, struct v2 a, struct v2 b, struct v2 c,
     c = rot_or(c, o, r);
     int d = dist(b, c);
     for (int i = 0; i <= d; i++) {
-        draw_line(f,
+        line(f,
             a,
             (struct v2) {
             lerp(b.x, c.x, i / (float)d),
@@ -146,18 +229,16 @@ int box(int a, int b, int c, int d) {
 
 }
 
-int card(int x, int y, int cx, int cy, int w, int h) {
+int v2_box(int x, int y, int cx, int cy, int w, int h) {
     if ((x > cx && x < cx + w) && (y > cy && y < cy + h)) return 1;
     else   return 0;
 }
+int v2_circle(struct v2 v, struct v2 r) {
 
+}
 struct color hsv_to_rgb(float h, float s, float v) {
     struct color c;
-    if (s == 0.0f) {
-        // Achromatic (grey)
-        c.r = c.g = c.b = (unsigned char)(v * 255.0f);
-        return c;
-    }
+
     h = fmodf(h, 360.0f);          // wrap hue
     float hh = h / 60.0f;
     int i = (int)hh;
@@ -176,3 +257,4 @@ struct color hsv_to_rgb(float h, float s, float v) {
     }
     return c;
 }
+

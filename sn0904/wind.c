@@ -2,7 +2,16 @@
 #include <windows.h>
 #include <stdio.h>
 #include "sn.h"
-#define windows 31
+#define windows 3
+// High-frequency sub-pixel coordinates
+double g_floatingMouseX = 0.0;
+double g_floatingMouseY = 0.0;
+LARGE_INTEGER frequency;
+LARGE_INTEGER startTime;
+LARGE_INTEGER endTime;
+double elapsedTime = 0;
+// Optional sensitivity modifier 
+const double MOUSE_SENSITIVITY = 1.0;
 
 int quit;
 
@@ -41,10 +50,35 @@ void text(char* t, float x, float y, int m, int id) {
     SetTextColor(tex[id].frame_device_context, RGB(111, 255, 255));
     SetBkMode(tex[id].frame_device_context, m);
     SetBkColor(tex[id].frame_device_context, RGB(0, 111, 111));
-    RECT r = { x,  tex[id].f.height - y, x + 33,  tex[id].f.height - y + 33 };
+    RECT r = { x,  tex[id].f.height - y, x + 222,  tex[id].f.height - y + 33 };
     DrawTextA(tex[id].frame_device_context, t, -1, &r, 0);
 
     DeleteObject(font);
+}
+
+void wpaint(int id, HWND window_handle) {
+    tex[id].device_context = BeginPaint(window_handle, &ps);
+    char str[64];
+    clear(tex[id].f);
+
+    paint(tex[id].f, id);
+    sprintf(str, "Hi! f%iK%i a%i", s.frame / 1000, (int)(1./elapsedTime*1000.), s.actions);
+    if (id == 1) text(str, 1, tex[id].f.height - 11, OPAQUE, id);
+
+    BitBlt(tex[id].device_context,
+        ps.rcPaint.left,
+        ps.rcPaint.top,
+        ps.rcPaint.right - ps.rcPaint.left,
+        ps.rcPaint.bottom - ps.rcPaint.top,
+        tex[id].frame_device_context,
+        ps.rcPaint.left, ps.rcPaint.top,
+        SRCCOPY);
+
+    EndPaint(window_handle, &ps);
+}
+
+void vproc() {
+    process(elapsedTime);
 }
 
 LRESULT CALLBACK wpm(HWND window_handle,
@@ -59,12 +93,12 @@ LRESULT CALLBACK wpm(HWND window_handle,
     }
 
     int x = LOWORD(lParam);
-    int y = tex[id].f.height-1 - HIWORD(lParam);
+    int y = tex[id].f.height - HIWORD(lParam);
 
     if (message == WM_KEYDOWN && wParam == 'R') {}
     if (message == WM_KEYDOWN && wParam == VK_ESCAPE) { quit = 1; }
     if (message == WM_LBUTTONDOWN) {
-        point(tex[id].f, x, y, s.pick);
+        
     }
     if (message == WM_RBUTTONDOWN) {
         s.pick = pick(tex[id].f, x, y, id);
@@ -74,41 +108,38 @@ LRESULT CALLBACK wpm(HWND window_handle,
     case WM_QUIT: {} break;
     case WM_DESTROY: { quit = 1; } break;
     case WM_MOUSEMOVE: {
-        spawn((struct node) { (
-            struct v2) {x,y},
-            s.pick
-        });
-        printf("m%i %i ~%i~\n", x, y, id);
+        if (id == 1) {
+            move(x, y);
+            printf("m%i %i ~%i~\n", x, y, id);
+        }
     } break;
 
     case WM_PAINT: {
 
-        tex[id].device_context = BeginPaint(window_handle, &ps);
+        wpaint(id, window_handle);
 
-        clear(tex[id].f);
-        if (id==0) 
-            colors(tex[id].f, id);
-        else
-            paint(tex[id].f, id);
+    } break;
+    case WM_MOVING: {
+        printf("asd");
+        process(15.);
+        for (int i = 0; i < windows; i++) {
 
-        char str[64]; sprintf(str, "Hi!");
-        text(str, 1, tex[id].f.height - 11, OPAQUE, id);
-
-        BitBlt(tex[id].device_context,
-            ps.rcPaint.left,
-            ps.rcPaint.top,
-            ps.rcPaint.right - ps.rcPaint.left,
-            ps.rcPaint.bottom - ps.rcPaint.top,
-            tex[id].frame_device_context,
-            ps.rcPaint.left, ps.rcPaint.top,
-            SRCCOPY);
-
-        EndPaint(window_handle, &ps);
-
-        //  SetWindowTextA(window_handle, "snry rpg sn0833");
+            InvalidateRect(tex[i].window_handle, NULL, FALSE);
+            UpdateWindow(tex[i].window_handle);
+        }
 
     } break;
 
+    case WM_SIZING: {
+        printf("qwer");
+        process(.1);
+        for (int i = 0; i < windows; i++) {
+
+            InvalidateRect(tex[i].window_handle, NULL, FALSE);
+            UpdateWindow(tex[i].window_handle);
+        }
+
+    } break;
     case WM_SIZE: {
 
         tex[id].frame_bitmap_info.bmiHeader.biWidth = LOWORD(lParam);
@@ -129,7 +160,42 @@ LRESULT CALLBACK wpm(HWND window_handle,
         InvalidateRect(window_handle, NULL, TRUE);
 
     } break;
+    case WM_INPUT: {
+        UINT dwSize = 0;
 
+        // First call determines the required buffer size
+        GetRawInputData((HRAWINPUT)lParam, RID_INPUT, NULL, &dwSize, sizeof(RAWINPUTHEADER));
+
+        if (dwSize > 0) {
+            LPBYTE lpb = (LPBYTE)malloc(dwSize);
+            if (lpb == NULL) return 0;
+
+            // Second call populates the raw data buffer
+            if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER)) == dwSize) {
+                RAWINPUT* raw = (RAWINPUT*)lpb;
+
+                if (raw->header.dwType == RIM_TYPEMOUSE) {
+                    // Check if the data represents relative motion
+                    if ((raw->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0) {
+                        // Read raw integer relative deltas
+                        long deltaX = raw->data.mouse.lLastX;
+                        long deltaY = raw->data.mouse.lLastY;
+                        printf("%ld\n", deltaX);
+
+
+                        // Accumulate directly into floating-point registers
+                        g_floatingMouseX += (double)deltaX * MOUSE_SENSITIVITY;
+                        g_floatingMouseY += (double)deltaY * MOUSE_SENSITIVITY;
+
+                        // Your custom application logic here (e.g., update camera angles)
+                    }
+                }
+            }
+            free(lpb);
+        }
+        return 0; // Return 0 to indicate the message was handled
+    }
+    
     default: {
         return DefWindowProc(window_handle, message, wParam, lParam);
     }
@@ -157,7 +223,29 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     window_class.hCursor = LoadCursor(NULL, IDC_ARROW);
     RegisterClassA(&window_class);
 
+    int w, h, x, y;
     for (int i = 0; i < windows; i++) {
+
+        if (i == 2) {
+            w = 32*16;
+            h = 32;
+            x = 345;
+            y = 67;
+        }
+        if (i == 1) {
+             w = 512 - i * 2;
+             h = 256 - i;
+             x = 123 + i * 4;
+             y = 178 + i;
+        }
+        if (i == 0) {
+             w = 256;
+             h = 64;
+             x = 33;
+             y = 67 ;
+        }
+
+
         tex[i].frame_bitmap_info.bmiHeader.biSize =
             sizeof(tex[i].frame_bitmap_info.bmiHeader);
         tex[i].frame_bitmap_info.bmiHeader.biPlanes = 1;
@@ -165,13 +253,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         tex[i].frame_bitmap_info.bmiHeader.biCompression = BI_RGB;
         tex[i].frame_device_context = CreateCompatibleDC(0);
 
+        RECT rc = { 0, 0, w, h };
+        AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
+        int ww = rc.right - rc.left;
+        int wh = rc.bottom - rc.top;
         tex[i].window_handle = CreateWindowA(
             "CLASS", L"snry template", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            123 + i*4, 123 + i, 512 - i*2, 256 - i+39, NULL, NULL, hInstance, NULL
+            x, y, ww, wh, NULL, NULL, hInstance, NULL
         );
 
-            tex[i].f.width = 512 - i * 2;
-            tex[i].f.height = 256 - i;
+            tex[i].f.width = w;
+            tex[i].f.height = h;
             tex[i].frame_bitmap_info.bmiHeader.biWidth = tex[i].f.width;
             tex[i].frame_bitmap_info.bmiHeader.biHeight = tex[i].f.height;
             tex[i].frame_bitmap = CreateDIBSection(NULL,
@@ -179,40 +271,46 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                 (void**)&tex[i].f.pixels, 0, 0);
             SelectObject(tex[i].frame_device_context, tex[i].frame_bitmap);
 
-            clear(tex[i].f);
-            paint(tex[i].f, i);
-            tex[i].device_context = BeginPaint(tex[i].window_handle, &ps);
-            BitBlt(tex[i].device_context,
-                ps.rcPaint.left,
-                ps.rcPaint.top,
-                ps.rcPaint.right - ps.rcPaint.left,
-                ps.rcPaint.bottom - ps.rcPaint.top,
-                tex[i].frame_device_context,
-                ps.rcPaint.left, ps.rcPaint.top,
-                SRCCOPY);
+            InvalidateRect(tex[i].window_handle, NULL, FALSE);
 
-            EndPaint(tex[i].window_handle, &ps);
-            InvalidateRect(tex[i].window_handle, NULL, TRUE);
+            wpaint(i, tex[i].window_handle);
 
-        
     }
 
-    console();
-    consoleWindow = GetConsoleWindow();
-    SetWindowPos(consoleWindow, 0, 33, 432, 512, 256, 0);
-    SetForegroundWindow(tex[windows-1].window_handle);
+    RAWINPUTDEVICE Rid = { 0 };
+    Rid.usUsagePage = 0x01;          // HID usage page for generic desktop
+    Rid.usUsage = 0x02;          // HID usage for mouse
+    Rid.dwFlags = RIDEV_INPUTSINK; // receive messages even when not foreground
+    Rid.hwndTarget = tex[0].window_handle;
+    RegisterRawInputDevices(&Rid, 1, sizeof(Rid));
+
+    // Get the ticks per second of the performance counter
+    QueryPerformanceFrequency(&frequency);
+
+    // Start timing
 
     while (!quit) {
+        QueryPerformanceCounter(&startTime);
         while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
             DispatchMessage(&msg);
         }
-        for (int i = 0; i < windows; i++) {
+        if (F == 111) {
+            console();
+            consoleWindow = GetConsoleWindow();
+            SetWindowPos(consoleWindow, 0, 33, 432, 512, 256, 0);
+            SetForegroundWindow(tex[1].window_handle);
 
+            init();
+        }
+
+        for (int i = 0; i < windows; i++) {
             InvalidateRect(tex[i].window_handle, NULL, FALSE);
             UpdateWindow(tex[i].window_handle);
         }
+        process(elapsedTime);
+        QueryPerformanceCounter(&endTime);
+        elapsedTime = (double)(endTime.QuadPart - startTime.QuadPart) * 1000.0 / frequency.QuadPart;
         F++;
-       Sleep(1);
     }
     return 0;
 
