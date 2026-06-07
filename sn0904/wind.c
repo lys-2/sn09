@@ -2,6 +2,8 @@
 #include <windows.h>
 #include <stdio.h>
 #include "sn.h"
+#include "wa.h"
+
 #define windows 3
 // High-frequency sub-pixel coordinates
 double g_floatingMouseX = 0.0;
@@ -10,8 +12,6 @@ LARGE_INTEGER frequency;
 LARGE_INTEGER startTime;
 LARGE_INTEGER endTime;
 double elapsedTime = 0;
-// Optional sensitivity modifier 
-const double MOUSE_SENSITIVITY = 1.0;
 
 int quit;
 
@@ -96,6 +96,11 @@ LRESULT CALLBACK wpm(HWND window_handle,
     int y = tex[id].f.height - HIWORD(lParam);
 
     if (message == WM_KEYDOWN && wParam == 'R') {}
+    if (message == WM_KEYDOWN && wParam == 'Q') {
+        spawn(
+            (struct node) {( struct v2) { s.mx, s.my }, .is_block = 1, .sx=33, .c=white }
+        );
+    }
     if (message == WM_KEYDOWN && wParam == VK_ESCAPE) { quit = 1; }
     if (message == WM_LBUTTONDOWN) {
         
@@ -109,8 +114,12 @@ LRESULT CALLBACK wpm(HWND window_handle,
     case WM_DESTROY: { quit = 1; } break;
     case WM_MOUSEMOVE: {
         if (id == 1) {
+            s.mx = x;
+            s.my = y;
             move(x, y);
-            printf("m%i %i ~%i~\n", x, y, id);
+           // printf("m%i %i ~%i~\n", x, y, id);
+          //  wave_step = 6.283 / (SAMPLING_RATE / (float)x / 11.);
+
         }
     } break;
 
@@ -162,38 +171,22 @@ LRESULT CALLBACK wpm(HWND window_handle,
     } break;
     case WM_INPUT: {
         UINT dwSize = 0;
-
-        // First call determines the required buffer size
         GetRawInputData((HRAWINPUT)lParam, RID_INPUT, NULL, &dwSize, sizeof(RAWINPUTHEADER));
-
         if (dwSize > 0) {
             LPBYTE lpb = (LPBYTE)malloc(dwSize);
             if (lpb == NULL) return 0;
-
-            // Second call populates the raw data buffer
             if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER)) == dwSize) {
                 RAWINPUT* raw = (RAWINPUT*)lpb;
-
                 if (raw->header.dwType == RIM_TYPEMOUSE) {
-                    // Check if the data represents relative motion
                     if ((raw->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0) {
-                        // Read raw integer relative deltas
                         long deltaX = raw->data.mouse.lLastX;
                         long deltaY = raw->data.mouse.lLastY;
-                        printf("%ld\n", deltaX);
-
-
-                        // Accumulate directly into floating-point registers
-                        g_floatingMouseX += (double)deltaX * MOUSE_SENSITIVITY;
-                        g_floatingMouseY += (double)deltaY * MOUSE_SENSITIVITY;
-
-                        // Your custom application logic here (e.g., update camera angles)
                     }
                 }
             }
             free(lpb);
         }
-        return 0; // Return 0 to indicate the message was handled
+        return 0;
     }
     
     default: {
@@ -283,24 +276,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     Rid.dwFlags = RIDEV_INPUTSINK; // receive messages even when not foreground
     Rid.hwndTarget = tex[0].window_handle;
     RegisterRawInputDevices(&Rid, 1, sizeof(Rid));
-
-    // Get the ticks per second of the performance counter
     QueryPerformanceFrequency(&frequency);
-
-    // Start timing
 
     while (!quit) {
         QueryPerformanceCounter(&startTime);
         while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
             DispatchMessage(&msg);
         }
+        if (F == 1) {
+        }
         if (F == 111) {
             console();
             consoleWindow = GetConsoleWindow();
             SetWindowPos(consoleWindow, 0, 33, 432, 512, 256, 0);
             SetForegroundWindow(tex[1].window_handle);
-
             init();
+            waudio();
         }
 
         for (int i = 0; i < windows; i++) {

@@ -11,10 +11,11 @@
 struct frame { int width; int height; unsigned char* pixels; };
 struct v2 { float x, y; };
 struct tri { int a, b, c; };
-struct color { char r, g, b, a; };
+struct color { unsigned char r, g, b, a; };
 enum type { Tnode, Tline, Ttri };
 struct node {
-    struct v2 t; struct color c; char is_spawned, is_linked; float sx, sy, rot, a;
+    struct v2 t; struct color c; char is_spawned, is_la, is_lb, is_block;
+    float sx, sy, rot, a;
     struct v2 v; char la, lb, at;
     enum type type;
 };
@@ -28,6 +29,7 @@ struct state s;
 void spawn(struct node n);
 
 void move(int x, int y);
+int hit(int a, int b);
 
 void paint(struct frame f, int id);
 void clear(struct frame f);
@@ -37,9 +39,14 @@ struct color pick(struct frame f, int x, int y, int id);
 void point(struct frame f, int x, int y, struct color c);
 void ring2(struct frame f, struct v2 centre, struct color c, float radius);
 void circle(struct frame f, struct v2 centre, struct color c, float radius);
-
+void tri(struct frame f, struct v2 a, struct v2 b, struct v2 c,
+    struct v2 o, struct color cl, float r);
 void line(struct frame f, struct v2 a, struct v2 b, struct v2 o,
     struct color c, float an);
+void line2(struct frame f, struct v2 a, struct v2 b, struct v2 o, struct color c, float r);
 float line_angle_rad(struct v2 a, struct v2 b);
+int v2_circle(struct v2 a, struct v2 b, float r);
 void init();
 void process();
+
+short sound2();
