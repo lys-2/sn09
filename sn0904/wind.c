@@ -3,8 +3,11 @@
 #include <stdio.h>
 #include "sn.h"
 #include "wa.h"
+#include "Wm.h"
+#include "wind.h"
+#include "main.h"
+#include "Wgl.h"
 
-#define windows 3
 // High-frequency sub-pixel coordinates
 double g_floatingMouseX = 0.0;
 double g_floatingMouseY = 0.0;
@@ -14,16 +17,6 @@ LARGE_INTEGER endTime;
 double elapsedTime = 0;
 
 int quit;
-
-struct wframe {
-    BITMAPINFO frame_bitmap_info;
-    HBITMAP frame_bitmap;
-    HWND window_handle;
-    HDC device_context, frame_device_context;
-    struct frame f;
-};
-
-struct wframe tex[windows];
 
 PAINTSTRUCT ps;
 WNDCLASS window_class;
@@ -94,8 +87,12 @@ LRESULT CALLBACK wpm(HWND window_handle,
 
     int x = LOWORD(lParam);
     int y = tex[id].f.height - HIWORD(lParam);
-
-    if (message == WM_KEYDOWN && wParam == 'R') {}
+    if (message == WM_KEYDOWN && wParam == 'W') { move2(0, 1); }
+    if (message == WM_KEYDOWN && wParam == 'J') { load(); }
+    if (message == WM_KEYDOWN && wParam == 'K') { save(); }
+    if (message == WM_KEYDOWN && wParam == 'R') {
+        reset();
+    }
     if (message == WM_KEYDOWN && wParam == 'Q') {
         spawn(
             (struct node) {( struct v2) { s.mx, s.my }, .is_block = 1, .sx=33, .c=white }
@@ -124,12 +121,12 @@ LRESULT CALLBACK wpm(HWND window_handle,
     } break;
 
     case WM_PAINT: {
-
-        wpaint(id, window_handle);
+        if (id == 3) return DefWindowProc(window_handle, message, wParam, lParam);
+        if (id == 4) return DefWindowProc(window_handle, message, wParam, lParam);
+       wpaint(id, window_handle);
 
     } break;
     case WM_MOVING: {
-        printf("asd");
         process(15.);
         for (int i = 0; i < windows; i++) {
 
@@ -140,10 +137,8 @@ LRESULT CALLBACK wpm(HWND window_handle,
     } break;
 
     case WM_SIZING: {
-        printf("qwer");
-        process(.1);
+        process(5.1);
         for (int i = 0; i < windows; i++) {
-
             InvalidateRect(tex[i].window_handle, NULL, FALSE);
             UpdateWindow(tex[i].window_handle);
         }
@@ -214,11 +209,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     window_class.hInstance = hInstance;
     window_class.lpszClassName = "CLASS";
     window_class.hCursor = LoadCursor(NULL, IDC_ARROW);
+    window_class.style = CS_OWNDC;
     RegisterClassA(&window_class);
 
     int w, h, x, y;
     for (int i = 0; i < windows; i++) {
-
+        if (i == 5) { w = 256; h = 123; x = 678; y = 488; }
+        if (i == 4) { w = 256; h = 128; x = 678; y = 333; }
+        if (i == 3) { w = 256; h = 123; x = 678; y = 145; }
         if (i == 2) {
             w = 32*16;
             h = 32;
@@ -251,7 +249,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         int ww = rc.right - rc.left;
         int wh = rc.bottom - rc.top;
         tex[i].window_handle = CreateWindowA(
-            "CLASS", L"snry template", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            "CLASS", L"snry template", WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_POPUP,
             x, y, ww, wh, NULL, NULL, hInstance, NULL
         );
 
@@ -264,10 +262,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                 (void**)&tex[i].f.pixels, 0, 0);
             SelectObject(tex[i].frame_device_context, tex[i].frame_bitmap);
 
-            InvalidateRect(tex[i].window_handle, NULL, FALSE);
 
             wpaint(i, tex[i].window_handle);
 
+
+            InvalidateRect(tex[i].window_handle, NULL, FALSE);
     }
 
     RAWINPUTDEVICE Rid = { 0 };
@@ -279,26 +278,50 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     QueryPerformanceFrequency(&frequency);
 
     while (!quit) {
+        process(elapsedTime);
         QueryPerformanceCounter(&startTime);
+
+
         while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
             DispatchMessage(&msg);
         }
         if (F == 1) {
+            init();
+            wgl2(tex[4].window_handle);
+            sw();
+        }
+        if (F == 211) {
+            waudio();
+            wmidi();
         }
         if (F == 111) {
+            wgl(tex[3].window_handle);
+            gloop(tex[3].device_context);
+            sw2();
+        }
+
+        if (F == 333) {
             console();
+            SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
             consoleWindow = GetConsoleWindow();
             SetWindowPos(consoleWindow, 0, 33, 432, 512, 256, 0);
             SetForegroundWindow(tex[1].window_handle);
-            init();
-            waudio();
+
         }
 
         for (int i = 0; i < windows; i++) {
+            if (i == 3 && F > 111) {
+                sw();
+                gloop(tex[i].device_context);
+            }
+            if (i == 4 && F>3) {
+                sw2();
+                gloop2();
+            }
             InvalidateRect(tex[i].window_handle, NULL, FALSE);
             UpdateWindow(tex[i].window_handle);
         }
-        process(elapsedTime);
+
         QueryPerformanceCounter(&endTime);
         elapsedTime = (double)(endTime.QuadPart - startTime.QuadPart) * 1000.0 / frequency.QuadPart;
         F++;

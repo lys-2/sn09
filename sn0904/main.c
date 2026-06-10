@@ -3,13 +3,20 @@
 
 #include "sn.h"
 #include "mat.h"
+#include "wind.h"
 #include "Wa.h"
 
 void init() {
-	printf("Hi!");
+    srand(GetTickCount());
+	printf("Hi!\r\n");
+    for (int i = 0; i < 111; i++) {
+        move(rand() % tex[1].f.width, rand() % tex[1].f.height);
+    }
+    spawn((struct node) {
+        (struct v2) { 33, 33 }, .c = red, .sx = 13, .is_block =1, .is_controlled=1 });
 };
 void process(double d) {
-
+    if (s.t > 120) reset();
     // Update positions and rotations (skip blocked nodes)
     for (int i = 0; i < 123; i++) {
         if (s.scene[i].is_block) continue;   // blocked nodes don't move
@@ -34,6 +41,7 @@ void process(double d) {
         }
     }
 
+    s.d = d;
     s.t += d / 1000.0;
 }
 

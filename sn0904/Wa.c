@@ -3,12 +3,11 @@
 #include <stdio.h>
 #include <math.h>
 #include "sn.h"
+#include "Wa.h"
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib") 
 
 HWAVEOUT wave_out;
-#define SAMPLING_RATE 44100
-#define CHUNK_SIZE 2222
 WAVEHDR header[2] = { 0 };
 short chunks[2][CHUNK_SIZE];
 char chunk_swap = 0;

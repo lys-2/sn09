@@ -1,17 +1,30 @@
+
+#include <stdio.h>
 #include "sn.h"
 #include "math.h"
+#include "wind.h"
+
 #define max(x, y) (((x) > (y)) ? (x) : (y))
 #define min(x, y) (((x) < (y)) ? (x) : (y))
 
-int sa = 0;
-double smp = 0;
 short sound2() {
-    sa++;
-    double st = 6.283 / ((float)44100 / s.mx/2.);
-    smp += st;
-    return sin(smp* sin(smp/s.my/4.))* sin(smp/11111.)*11111.;
+    double st = 6.283 / (44100. / s.mx / 2.);
+    double n = sin(s.sa* 6.283 *s.n /44100.)*2222;
+    s.sa++;
+    s.smp += st;
+    double out = 0;
+    out = sin(s.smp * sin(s.smp / s.my * 4.)) * sin(s.smp / 1111.) * 123.;
+    out += n;
+    return out;
 
 };
+
+void play(int id) {
+    double freq = 440.0 * pow(2.0, (id - 69) / 12.0);
+    printf("%i %f played!\n", id, freq);
+    spawn((struct node) { (struct v2) { s.t * 55, (id-21)*3 }, .is_block=1, .sx=6, .c=white });
+    s.n = freq;
+}
 
 float lerp(float a, float b, float f) {
 	float r = a * (1.0 - f) + (b * f);
@@ -20,13 +33,39 @@ float lerp(float a, float b, float f) {
 float len(struct v2 v) { return sqrt(v.x * v.x + v.y * v.y); };
 float dist(struct v2 a, struct v2 b) { return len((struct v2) { a.x - b.x, a.y - b.y }); };
 
-void spawn(struct node n) {
+struct v2 forward2(float a) {
+    struct v2 forward;
+    float ad = a ;
+    forward.x = cosf(ad);
+    forward.y = sinf(ad);
+    return forward;
+}
+
+void reset() { s = def; init(); s.frame = 345; }
+void load() {
+    FILE* fptr = fopen("save_nr", "rb");
+    if (fptr) {
+        fread(&s, sizeof(s), 1, fptr);
+        fclose(fptr);
+    }
+}
+void save() {
+    FILE* fptr = fopen("save_nr", "wb");
+    if (fptr) {
+        fwrite(&s, sizeof(s), 1, fptr);
+        fclose(fptr);
+    }
+}
+
+int spawn(struct node n) {
     if (s.scene[(s.scene_cur)% 123].is_block) {
         s.scene_cur++; return;
     }
     n.is_spawned = 1;
     s.scene[s.scene_cur % 123] = n;
+    int r = s.scene_cur;
     s.scene_cur++;
+    return r;
 }
 
 int hit(int a, int b) {
@@ -55,7 +94,25 @@ void move(int x, int y) {
             ) });
     s.mx = x;
     s.my = y;
+
+    for (int i = 0; i < 123; i++) {
+        if (s.scene[i].is_controlled) {
+            s.scene[i].rot = line_angle_rad((struct v2) {
+                s.scene[i].t.x, s.scene[i].t.y},
+                (struct v2) {x, y});        
+        }
+    }
+
     s.actions++;
+};
+void move2(int x, int y) {
+    for (int i = 0; i < 123; i++) {
+        if (s.scene[i].is_controlled) {
+            struct v2 f = forward2(s.scene[i].rot);
+            s.scene[i].t.x += f.x*s.d;
+            s.scene[i].t.y += f.y*s.d;
+        }
+    }
 };
 
 void point(struct frame f, int x, int y, struct color c) {
@@ -97,7 +154,7 @@ void paint(struct frame f, int id) {
     for (int i = 0; i < f.width * f.height; i++) {
         int y = i / f.width;
         int x = i % f.width;
-        f.pixels[1 % 4 + i * 4] = (x%7)*2;
+        f.pixels[1 % 4 + i * 4] = 22+sin(len((struct v2) {x, y})/22.)*22.;
         f.pixels[1 % 4 + i * 4] += (x%11)*3;
         f.pixels[0 + i * 4] = (y%13)*2;
         f.pixels[0 + i * 4] += (y%17)*3;
@@ -137,7 +194,7 @@ void paint(struct frame f, int id) {
             s.scene[i].c, s.scene[i].sx);
     }
         for (int i = 0; i < 123; i++) {
-            if (!s.scene[i].is_spawned || s.scene[i].is_block) continue;
+            if (!s.scene[i].is_spawned ) continue;
 
         line(f, 
             (struct v2) { s.scene[i].t.x, s.scene[i].t.y },
@@ -147,7 +204,14 @@ void paint(struct frame f, int id) {
             s.scene[i].rot
             );
     }
+
         }
+
+    for (int i = 0; i < 123; i++) {
+        if (!s.scene[i].is_spawned || !s.scene[i].is_controlled) continue;
+
+        text("a213dasd", s.scene[i].t.x, s.scene[i].t.y, 0, 1);
+    };
 }
 void colors(struct frame f, int id) {
     for (int i = 0; i < f.width * f.height; i++) {
@@ -219,10 +283,10 @@ void ring2(struct frame f, struct v2 o, struct color c, float radius) {
         point(f, x, y, c);
     }
 }
-void circle(struct frame f, struct v2 centre, struct color c, float radius) {
-    for (int i = 1; i < 4; i++) {
+void circle(struct frame f, struct v2 o, struct color c, float r) {
+    for (int i = 1; i < 14; i++) {
 
-        ring2(f, centre, c, radius);
+        ring2(f, o, c, r/i);
     }
 }
 
