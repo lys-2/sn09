@@ -210,7 +210,7 @@ void paint(struct frame f, int id) {
     for (int i = 0; i < 123; i++) {
         if (!s.scene[i].is_spawned || !s.scene[i].is_controlled) continue;
 
-        text("a213dasd", s.scene[i].t.x, s.scene[i].t.y, 0, 1);
+        text("player16", s.scene[i].t.x, s.scene[i].t.y, 0, 1);
     };
 }
 void colors(struct frame f, int id) {

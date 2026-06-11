@@ -33,8 +33,7 @@ void drawTetrahedron() {
     glVertex3fv(vertices[3]);
     glVertex3fv(vertices[1]);
 
-    // Face 4: Bottom (Vertices 1, 3, 2)
-    glColor3f(1.0f, 1.0f, 0.0f); // Yellow
+    glColor3f(1.0f, 0.0f, 1.0f); 
     glVertex3fv(vertices[1]);
     glVertex3fv(vertices[3]);
     glVertex3fv(vertices[2]);
@@ -57,14 +56,16 @@ void gloop(HDC hdc) {
     // wglMakeCurrent(hdc, hglrc); // uncomment if not already current
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+    glClearColor(0.1f, 0.1f, 0.4f, 1.0f);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     // Set up the camera (modelview)
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     // Move camera back 5 units along Z
-    glTranslatef(0.0f, 0.0f, -5.0f);
+    glTranslatef(2.0f, 0.0f, -9.0f);
     // Rotate the whole world based on mouse Y (optional)
-    glRotatef(s.my / 2.0f, 1.0f, 0.0f, 0.0f);
+    glRotatef(-55+s.my/2., -1.0f, 0.0f, 0.0f);
+    glRotatef(s.mx/2., 0.0f, 1.0f, 0.0f);
 
     // Draw the tetrahedron (it rotates by itself)
     glPushMatrix();
@@ -81,16 +82,29 @@ void gloop(HDC hdc) {
         float wx = (s.scene[i].t.x / 256.0f) * 4.0f - 2.0f;  // example mapping
         float wy = (s.scene[i].t.y / 128.0f) * 2.0f - 1.0f;
         glTranslatef(wx, wy, -2.0f);  // Z = -2 (inside frustum)
+        glRotatef(s.scene[i].rot*111., 0.0f, 0.0f, 1.0f);
         glBegin(GL_TRIANGLES);
         glColor3f(0.0f, 0.0f, 1.0f);
         glVertex3f(-0.2f, -0.2f, 0.0f);
         glColor3f(0.0f, 1.0f, 1.0f);
         glVertex3f(0.2f, -0.2f, 0.0f);
-        glColor3f(sin(s.t * 112.0f), 1.0f, 1.0f);
+        glColor3f(0., 1.0f, 1.0f);
         glVertex3f(0.0f, 0.2f, 0.0f);
         glEnd();
         glPopMatrix();
     }
+    glPushMatrix();
+    glTranslatef(0., -6., 0.);
+    glScalef(131.,1.,131.);
+    glBegin(GL_TRIANGLES);
+    glColor3f(1.0f, .1f, 0.0f);
+    glVertex3f(0.f, -1.2f, -1.0f);
+    glColor3f(0.0f, .3f, 1.0f);
+    glVertex3f(-1.2f, -1.f, 1.0f);
+    glColor3f(0., 1.0f, 1.0f);
+    glVertex3f(1.0f, -1.f, 1.0f);
+    glEnd();
+    glPopMatrix();
 
     SwapBuffers(hdc);
 }
@@ -130,7 +144,7 @@ int wgl(HWND hwnd) {
     double fov = 22.0 * 3.14159 / 180.0;
     double top = 0.1 * tan(fov / 2.0);
     double right = top * aspect;
-    glFrustum(-right, right, -top, top, 0.1, 100.0);
+    glFrustum(-right, right, -top, top, 0.1, 113.0);
 
     // Switch to modelview matrix for object transforms
     glMatrixMode(GL_MODELVIEW);

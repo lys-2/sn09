@@ -287,6 +287,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         }
         if (F == 1) {
             init();
+        }
+        if (F == 11) {
             wgl2(tex[4].window_handle);
             sw();
         }
@@ -314,7 +316,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                 sw();
                 gloop(tex[i].device_context);
             }
-            if (i == 4 && F>3) {
+            if (i == 4 && F>11) {
                 sw2();
                 gloop2();
             }
