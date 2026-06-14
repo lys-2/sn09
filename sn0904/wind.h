@@ -1,5 +1,5 @@
 #include <windows.h>
-void text(char* t, float x, float y, int m, int id);
+
 struct wframe {
     BITMAPINFO frame_bitmap_info;
     HBITMAP frame_bitmap;

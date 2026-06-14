@@ -61,6 +61,9 @@ BOOL   g_isRunning = TRUE;
 GLuint g_ShaderProgram = -1;
 GLint  g_TimeLocation = -1;
 GLint  g_mx = -1;
+GLfloat  g_sx = -1;
+GLint  g_sy = -1;
+float sx, sy;
 
 // GLSL Shader Source Strings
 const char* vertexShaderSource =
@@ -146,7 +149,7 @@ void sw2() {
 void gloop2() {
 
   //  wglMakeCurrent(g_hDC, g_hRC);
-
+    sw2();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     // Ensure we don't apply old model views to our screenspace coordinates
     glLoadIdentity();
@@ -158,6 +161,9 @@ void gloop2() {
         glUniform1f(g_TimeLocation, time);
     }
     glUniform1f(g_mx, (float)s.mx);
+    glUniform1f(g_sx, sx);
+    glUniform1f(g_sy, sy);
+
     glBegin(GL_QUADS);
     glColor3f(1.0f, 0.0f, 0.0f);
     glVertex2f(-1.0f, -1.0f);
@@ -172,7 +178,13 @@ void gloop2() {
     SwapBuffers(g_hDC);
 
 }
+void resize2(int x, int y) {
+    sw2();
+    sx = x;
+    sy = y;
+    glViewport(0, 0, x, y);
 
+}
 void wgl2(HWND hwnd) {
     WNDCLASSEX wc = { 0 };
     MSG msg;
@@ -192,7 +204,9 @@ void wgl2(HWND hwnd) {
     if (g_ShaderProgram<0) return 1;
     g_TimeLocation = glGetUniformLocation(g_ShaderProgram, "u_time");
     g_mx = glGetUniformLocation(g_ShaderProgram, "u_mx");
-    glViewport(0, 0, 256, 128);
+    g_sx = glGetUniformLocation(g_ShaderProgram, "u_sx");
+    g_sy = glGetUniformLocation(g_ShaderProgram, "u_sy");
+    resize2(256.,128.);
     // 1. Define the function pointer type for wglSwapIntervalEXT
     typedef BOOL(APIENTRY* PFNWGLSWAPINTERVALEXTPROC) (int);
 

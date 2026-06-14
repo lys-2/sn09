@@ -7,6 +7,8 @@
 #include "wind.h"
 #include "main.h"
 #include "Wgl.h"
+#include <dwmapi.h>
+#pragma comment(lib, "dwmapi.lib")
 
 // High-frequency sub-pixel coordinates
 double g_floatingMouseX = 0.0;
@@ -32,7 +34,7 @@ int get_window(HWND window_handle) {
     return -1;
 }
 
-void text(char* t, float x, float y, int m, int id) {
+void wtext(char* t, float x, float y, int m, int id) {
 
     font = CreateFontA(24, 0, 0, 0, FW_NORMAL, 0, 0, 0,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
@@ -56,7 +58,7 @@ void wpaint(int id, HWND window_handle) {
 
     paint(tex[id].f, id);
     sprintf(str, "Hi! f%iK%i a%i", s.frame / 1000, (int)(1./elapsedTime*1000.), s.actions);
-    if (id == 1) text(str, 1, tex[id].f.height - 11, OPAQUE, id);
+    if (id == 1) wtext(str, 1, tex[id].f.height - 11, OPAQUE, id);
 
     BitBlt(tex[id].device_context,
         ps.rcPaint.left,
@@ -90,6 +92,11 @@ LRESULT CALLBACK wpm(HWND window_handle,
     if (message == WM_KEYDOWN && wParam == 'W') { move2(0, 1); }
     if (message == WM_KEYDOWN && wParam == 'J') { load(); }
     if (message == WM_KEYDOWN && wParam == 'K') { save(); }
+    if (message == WM_KEYDOWN && wParam == 'E') { s.scene[player()].t.z+=1; }
+    if (message == WM_KEYDOWN && wParam == 'Q') { s.scene[player()].t.z-=1; }
+    if (message == WM_KEYDOWN && wParam == 'H') { host(); }
+    if (message == WM_KEYDOWN && wParam == 'N') { join(); }
+    if (message == WM_KEYDOWN && wParam == 'C') { udp_send("Hello!"); }
     if (message == WM_KEYDOWN && wParam == 'R') {
         reset();
     }
@@ -108,7 +115,9 @@ LRESULT CALLBACK wpm(HWND window_handle,
 
     switch (message) {
     case WM_QUIT: {} break;
-    case WM_DESTROY: { quit = 1; } break;
+    case WM_DESTROY: { 
+        quit = 1; 
+    } break;
     case WM_MOUSEMOVE: {
         if (id == 1) {
             s.mx = x;
@@ -160,6 +169,9 @@ LRESULT CALLBACK wpm(HWND window_handle,
         );
         tex[id].f.width = LOWORD(lParam);
         tex[id].f.height = HIWORD(lParam);
+        if (id == 3) resize(tex[id].f.width , tex[id].f.height);
+        if (id==4)
+        resize2(tex[id].f.width, tex[id].f.height);
         SelectObject(tex[id].frame_device_context, tex[id].frame_bitmap);
         InvalidateRect(window_handle, NULL, TRUE);
 
@@ -176,6 +188,8 @@ LRESULT CALLBACK wpm(HWND window_handle,
                     if ((raw->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0) {
                         long deltaX = raw->data.mouse.lLastX;
                         long deltaY = raw->data.mouse.lLastY;
+/*                        s.mx += deltaX;
+                        s.my += deltaY;*/
                     }
                 }
             }
@@ -202,8 +216,7 @@ void console() {
     freopen_s(&conerr, "CONOUT$", "w", stderr);
     //SetConsoleTitleA("console ");
 }
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-    PSTR pCmdLine, int nCmdShow) {
+void wwin(HINSTANCE hInstance) {
 
     window_class.lpfnWndProc = wpm;
     window_class.hInstance = hInstance;
@@ -261,7 +274,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                 &tex[i].frame_bitmap_info, DIB_RGB_COLORS,
                 (void**)&tex[i].f.pixels, 0, 0);
             SelectObject(tex[i].frame_device_context, tex[i].frame_bitmap);
-
+            COLORREF titleBackgroundColor = RGB(45, 45, 45, 35);
+            DwmSetWindowAttribute(tex[i].window_handle, DWMWA_CAPTION_COLOR, &titleBackgroundColor, sizeof(titleBackgroundColor));
 
             wpaint(i, tex[i].window_handle);
 
@@ -279,6 +293,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     while (!quit) {
         process(elapsedTime);
+        udp_poll();
         QueryPerformanceCounter(&startTime);
 
 
@@ -290,7 +305,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         }
         if (F == 11) {
             wgl2(tex[4].window_handle);
-            sw();
         }
         if (F == 211) {
             waudio();
@@ -299,10 +313,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         if (F == 111) {
             wgl(tex[3].window_handle);
             gloop(tex[3].device_context);
-            sw2();
         }
 
-        if (F == 333) {
+        if (F == 33) {
             console();
             SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
             consoleWindow = GetConsoleWindow();
@@ -313,11 +326,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         for (int i = 0; i < windows; i++) {
             if (i == 3 && F > 111) {
-                sw();
                 gloop(tex[i].device_context);
             }
             if (i == 4 && F>11) {
-                sw2();
                 gloop2();
             }
             InvalidateRect(tex[i].window_handle, NULL, FALSE);
@@ -327,6 +338,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         QueryPerformanceCounter(&endTime);
         elapsedTime = (double)(endTime.QuadPart - startTime.QuadPart) * 1000.0 / frequency.QuadPart;
         F++;
+        
     }
     return 0;
 

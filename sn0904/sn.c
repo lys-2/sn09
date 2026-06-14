@@ -2,11 +2,20 @@
 #include <stdio.h>
 #include "sn.h"
 #include "math.h"
-#include "wind.h"
+#include <stdlib.h>
+#include "main.h"
 
 #define max(x, y) (((x) > (y)) ? (x) : (y))
 #define min(x, y) (((x) < (y)) ? (x) : (y))
-
+struct rule {
+    char start[8], replace[8];
+    char it, len, letter;
+    float angle;
+};
+struct trans { struct v2 p; float rot; };
+struct state s, def;
+void turtle(
+    struct trans t, struct rule rule, int depth);
 short sound2() {
     double st = 6.283 / (44100. / s.mx / 2.);
     double n = sin(s.sa* 6.283 *s.n /44100.)*2222;
@@ -19,11 +28,43 @@ short sound2() {
 
 };
 
+void input(int key) {}
+void host() {
+    s.is_host = 1;
+    udp_init();
+}
+void join() {
+
+}
+void text() {
+
+}
+int player() {
+    for (int i = 0; i < SC; i++) {
+        if (s.scene[i].is_spawned && s.scene[i].is_controlled) return i;
+        return -1;
+    };
+}
+float hf(float x, float y) {
+
+    return 
+        sin(x * sin(y / 2212.)) * sin(len((struct v2) {x,y})/13111.);
+}
+
 void play(int id) {
     double freq = 440.0 * pow(2.0, (id - 69) / 12.0);
     printf("%i %f played!\n", id, freq);
     spawn((struct node) { (struct v2) { s.t * 55, (id-21)*3 }, .is_block=1, .sx=6, .c=white });
     s.n = freq;
+    for (int i = 1; i < 5; i++) {
+        turtle(
+            (struct trans) {
+            s.t * 55, (id - 21) * 3, 0.
+        },
+            (struct rule) {
+            "F", "FF+", 8, 12, 'F', i + sin(F / 11.) / 1111.
+        }, 0);
+    }
 }
 
 float lerp(float a, float b, float f) {
@@ -58,11 +99,12 @@ void save() {
 }
 
 int spawn(struct node n) {
-    if (s.scene[(s.scene_cur)% 123].is_block) {
-        s.scene_cur++; return;
+    if (s.scene[(s.scene_cur)% SC].is_block) {
+        s.scene_cur++; return -1;
     }
     n.is_spawned = 1;
-    s.scene[s.scene_cur % 123] = n;
+    n.t.z = (rand() % 222)/222.;
+    s.scene[s.scene_cur % SC] = n;
     int r = s.scene_cur;
     s.scene_cur++;
     return r;
@@ -71,31 +113,31 @@ int spawn(struct node n) {
 int hit(int a, int b) {
     return v2_circle(s.scene[a].t, s.scene[b].t, s.scene[b].sx);
 }
-
-void move(int x, int y) {
+int spawn_r(int x, int y) {
     struct color c;
     if (s.pick.a == 0) c = hsv_to_rgb(rand() % 360, 1, 1);
     else c = s.pick;
-
     spawn((struct node) {
-        ( struct v2) { s.mx, s.my },
+        (struct v2) {x, y},
             .c = c,
             .sx = 2 + rand() % 7,
-            .is_la = !(rand()%11),
+            .is_la = !(rand() % 11),
             .is_lb = !(rand() % 11),
             .la = rand() % 111,
             .lb = rand() % 111,
-            .v.x = (111/2-rand()%111)/111.,
-            .v.y =  (111/2-rand()%111)/111.,
-            .a = (111/2-rand()%111)/11111.,
-            .rot = line_angle_rad(
-                (struct v2) { s.mx, s.my},
-                (struct v2) {  x, y   }
-            ) });
+            .v.x = (111 / 2 - rand() % 111) / 111.,
+            .v.y = (111 / 2 - rand() % 111) / 111.,
+            .a = (111 / 2 - rand() % 111) / 11111.,
+            .rot = line_angle_rad( (struct v2) { s.mx, s.my }, (struct v2) {x, y})
+    });
+}
+
+void move(int x, int y) {
+
     s.mx = x;
     s.my = y;
-
-    for (int i = 0; i < 123; i++) {
+    spawn_r(x,y);
+    for (int i = 0; i < SC; i++) {
         if (s.scene[i].is_controlled) {
             s.scene[i].rot = line_angle_rad((struct v2) {
                 s.scene[i].t.x, s.scene[i].t.y},
@@ -106,7 +148,7 @@ void move(int x, int y) {
     s.actions++;
 };
 void move2(int x, int y) {
-    for (int i = 0; i < 123; i++) {
+    for (int i = 0; i < SC; i++) {
         if (s.scene[i].is_controlled) {
             struct v2 f = forward2(s.scene[i].rot);
             s.scene[i].t.x += f.x*s.d;
@@ -154,12 +196,13 @@ void paint(struct frame f, int id) {
     for (int i = 0; i < f.width * f.height; i++) {
         int y = i / f.width;
         int x = i % f.width;
-        f.pixels[1 % 4 + i * 4] = 22+sin(len((struct v2) {x, y})/22.)*22.;
-        f.pixels[1 % 4 + i * 4] += (x%11)*3;
-        f.pixels[0 + i * 4] = (y%13)*2;
-        f.pixels[0 + i * 4] += (y%17)*3;
+        f.pixels[1 % 4 + i * 4] = ((1.+hf(x,y))/2.)*66.;
+      //  f.pixels[1 % 4 + i * 4] += (x%11)*3;
+/*        f.pixels[0 + i * 4] = (y%13)*2;
+        f.pixels[0 + i * 4] += (y%17)*3;*/
     }
-    for (int i = 0; i < 123; i++) {
+    for (int i = 0; i < SC; i++) {
+
         if (!s.scene[i].is_spawned) continue;
         if (!s.scene[i].is_la || !s.scene[i].is_lb) continue;
 
@@ -172,7 +215,7 @@ void paint(struct frame f, int id) {
             0
         );
     }
-    for (int i = 0; i < 123; i++) {
+    for (int i = 0; i < SC; i++) {
         if (!s.scene[i].is_spawned) continue;
         if (!s.scene[i].is_la) continue;
         line(f, 
@@ -186,14 +229,14 @@ void paint(struct frame f, int id) {
             0
             );
     }
-    for (int i = 0; i < 123; i++) {
+    for (int i = 0; i < SC; i++) {
         if (!s.scene[i].is_spawned) continue;
 
         point(f, s.scene[i].t.x, s.scene[i].t.y, s.scene[i].c);
         circle(f, (struct v2) { s.scene[i].t.x, s.scene[i].t.y },
             s.scene[i].c, s.scene[i].sx);
     }
-        for (int i = 0; i < 123; i++) {
+        for (int i = 0; i < SC; i++) {
             if (!s.scene[i].is_spawned ) continue;
 
         line(f, 
@@ -207,10 +250,13 @@ void paint(struct frame f, int id) {
 
         }
 
-    for (int i = 0; i < 123; i++) {
+    for (int i = 0; i < SC; i++) {
         if (!s.scene[i].is_spawned || !s.scene[i].is_controlled) continue;
 
-        text("player16", s.scene[i].t.x, s.scene[i].t.y, 0, 1);
+#if defined(_WIN32)
+        wtext("playe1r7", s.scene[i].t.x, s.scene[i].t.y, 0, 1);
+#endif
+
     };
 }
 void colors(struct frame f, int id) {
@@ -326,7 +372,7 @@ void tri(struct frame f, struct v2 a, struct v2 b, struct v2 c,
         );
     };
 }
-int box_draw(int a, int b, int c, int d, float r) {
+int box_draw(float sx, float sy, struct v2 o, float r) {
 
 }
 
@@ -360,3 +406,62 @@ struct color hsv_to_rgb(float h, float s, float v) {
     return c;
 }
 
+struct v2 forward(struct v2 p, float angle, float d) {
+    struct v2 f = { cos(angle), sin(angle) };
+    p.x += f.x * d;
+    p.y += f.y * d;
+    return p;
+}
+
+char* lsys(char* st, char* r, int d) {
+
+    if (!d) return st;
+
+    char str[12345] = { 0 };
+    char c[2]; c[1] = 0;
+    int i = 0;
+    while (st[i]) {
+        if (st[i] == 'F') { strcat(&str, r); }
+        else { c[0] = st[i]; strcat(&str, &c); }
+        i++;
+    }
+    //printf("%s, %i\n", &str, d); 
+    return lsys(&str, r, d - 1);
+
+}
+void turtle(
+    struct trans t, struct rule rule, int depth) {
+
+    char* str = lsys(rule.start, rule.replace, rule.it);
+    struct v2 a = t.p;
+    struct v2 b = { 0 };
+    struct v2 ps = { 0 };
+    float rs = 0;
+
+    float rot = t.rot;
+    int i = 0;
+    printf("str %s", str);
+    while (str[i] != 0) {
+        if (str[i] == '+') { rot += 3.1415 / rule.angle; }
+        if (str[i] == '-') { rot -= 3.1415 / rule.angle; }
+        if (str[i] == '[') { rs = rot; ps = a; }
+        if (str[i] == ']') { rot = rs; a = ps; }
+
+        if (str[i] == 'F') {
+            b = forward(a, rot, rule.len);
+            spawn((struct node) {
+                (struct v2) {
+                a.x, a.y
+            },
+                    .c = hsv_to_rgb(rand() % 360, 1, 1),
+                    .sx = 2 + rand() % 7,
+                    .is_la = 1,
+                    .la = 1,
+                    .rot = line_angle_rad((struct v2) { s.mx, s.my }, (struct v2) { a.x, a.y })
+            });
+            a = b;
+        }
+        i++;
+    }
+
+}
