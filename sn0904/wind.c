@@ -116,6 +116,7 @@ LRESULT CALLBACK wpm(HWND window_handle,
     switch (message) {
     case WM_QUIT: {} break;
     case WM_DESTROY: { 
+        wclean();
         quit = 1; 
     } break;
     case WM_MOUSEMOVE: {
@@ -302,20 +303,21 @@ void wwin(HINSTANCE hInstance) {
         }
         if (F == 1) {
             init();
-        }
-        if (F == 11) {
-            wgl2(tex[4].window_handle);
-        }
-        if (F == 211) {
             waudio();
             wmidi();
+            wgl2(tex[4].window_handle);
+            wgl(tex[3].window_handle);
+        }
+        if (F == 11) {
+
+        }
+        if (F == 211) {
+
         }
         if (F == 111) {
-            wgl(tex[3].window_handle);
-            gloop(tex[3].device_context);
         }
 
-        if (F == 33) {
+        if (F == 0) {
             console();
             SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
             consoleWindow = GetConsoleWindow();
@@ -325,14 +327,14 @@ void wwin(HINSTANCE hInstance) {
         }
 
         for (int i = 0; i < windows; i++) {
-            if (i == 3 && F > 111) {
+            if (i == 3 && F > 1) {
                 gloop(tex[i].device_context);
             }
-            if (i == 4 && F>11) {
+            if (i == 4 && F>1) {
                 gloop2();
             }
             InvalidateRect(tex[i].window_handle, NULL, FALSE);
-            UpdateWindow(tex[i].window_handle);
+            //UpdateWindow(tex[i].window_handle);
         }
 
         QueryPerformanceCounter(&endTime);

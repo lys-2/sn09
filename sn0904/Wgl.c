@@ -137,7 +137,7 @@ void gloop(HDC hdc) {
     glColor4f(1.0f, .1f, 1.0f, .1);
     glVertex3f(s.mx, s.my, 0.0f);
     glColor4f(0.0f, .3f, 1.0f, .1);
-    glVertex3f(s.mx, s.my, -22.0f);
+    glVertex3f(s.mx, s.my, -2.0f);
     glEnd();
     glPopMatrix();
 
@@ -147,13 +147,16 @@ void gloop(HDC hdc) {
         glPointSize(3.0f);
         glBegin(GL_POINTS);
         glColor3f(1.0f, .1f, 1.0f);
-        glVertex3f(x, y, hf(x, y)*123.);
+        glVertex3f(x, y, hf(x, y)*3.);
         glEnd();
     }
     SwapBuffers(hdc);
 }
 
-
+int wclean() {
+        wglMakeCurrent(NULL, NULL);
+    wglDeleteContext(hglrc);
+}
 int wgl(HWND hwnd) {
 
     hdc = GetDC(hwnd);
@@ -172,8 +175,8 @@ int wgl(HWND hwnd) {
 
     // 5. Create and activate the OpenGL Rendering Context (WGL)
     hglrc = wglCreateContext(hdc);
-    if (!hglrc) return 0;
-    if (!wglMakeCurrent(hdc, hglrc)) return 0;
+    if (!hglrc) printf("gl fail..");
+    if (!wglMakeCurrent(hdc, hglrc))  printf("gl fail.. 2");
 
 
     GetClientRect(hwnd, &rect);

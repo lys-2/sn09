@@ -6,7 +6,6 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <stdio.h>
-
 #pragma comment(lib, "Ws2_32.lib")
 
 #define PORT        12345
@@ -23,16 +22,14 @@ int udp_send(char* m) {
     memset(&clientAddr, 0, sizeof(clientAddr));
     clientAddr.sin_family = AF_INET;
     clientAddr.sin_port = htons(12345);
-    inet_pton(AF_INET, "46.188.104.83", &clientAddr.sin_addr);
+    inet_pton(AF_INET, "127.0.0.1", &clientAddr.sin_addr);
     sendto(g_udpSocket, m, (int)strlen(m), 0,
         (struct sockaddr*)&clientAddr, clientAddrLen);
 }
 
 int udp_init() {
     WSADATA wsaData;
-
     u_long mode = 1;  /* non‑blocking mode */
-
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         printf("WSAStartup failed\n");
         return 0;

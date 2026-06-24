@@ -10,7 +10,7 @@
 #define SC 1234
 
 struct frame { int width; int height; unsigned char* pixels; };
-struct v2 { float x, y, z; };
+typedef struct v2 { float x, y, z; };
 struct v3 { float x, y, z; };
 struct tri { int a, b, c; };
 enum node_state { idle, walk, run, hi, sit, lay, bye };
@@ -18,19 +18,21 @@ enum status { none, wet, dirt };
 struct ex { float x, y, r; char sa, sb;};
 struct pack { struct ex n[32]; };
 struct color { unsigned char r, g, b, a; };
+struct group { short start, len; };
+struct group2 { short i[SC]; };
 
 struct address { unsigned char a[4]; };
 
-enum type { Tnode, Tline, Ttri, Tchar, Tbox };
-struct node {
+enum type { Tnode, Tscene, Tgroup, Tbutton, Tpoint, Tline, Ttri, Tchar, Titem, Tbox, Tmesh };
+typedef struct node {
     struct v2 t; struct color c;
-    char is_spawned, is_la, is_lb, is_block, is_controlled, auto_spawn;
-    float sx, sy, sz, rot, a, dur;
-    struct v2 v; char la, lb, at;
+    char is_spawned, is_la, is_lb, is_block, is_controlled, auto_spawn, is_attached;
+    float sx, sy, sz, rot, a, time;
+    struct v2 v; int la, lb, at;
     char type;
-
+    struct group2 links;
+    int name, desc;
 };
-
 struct state {
     double n;
     int sa;
@@ -38,10 +40,13 @@ struct state {
     int frame, actions; float t, d;
     struct color pick; struct node scene[SC]; int scene_cur, mx, my;
     char is_host, is_remote;
+    short groups[12345], groups_cur;
+    char text[12345]; int text_cur;
 };
 extern struct state s, def;
 
 int spawn(struct node n);
+int text_new(char* t);
 
 void move(int x, int y);
 int hit(int a, int b);

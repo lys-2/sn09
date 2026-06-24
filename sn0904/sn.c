@@ -1,5 +1,8 @@
-
+#if defined(_WIN32)
+#define _CRT_SECURE_NO_WARNINGS
+#endif
 #include <stdio.h>
+#include <string.h>
 #include "sn.h"
 #include "math.h"
 #include <stdlib.h>
@@ -24,7 +27,7 @@ short sound2() {
     double out = 0;
     out = sin(s.smp * sin(s.smp / s.my * 4.)) * sin(s.smp / 1111.) * 123.;
     out += n;
-    return out;
+    return .5;
 
 };
 
@@ -36,19 +39,26 @@ void host() {
 void join() {
 
 }
-void text() {
+int group_new() { return s.groups_cur; }
+int group_add(int g, int i) {  
+}
 
+int text_new(char* t) {
+    int c = s.text_cur;
+    strcpy(&s.text[s.text_cur], t);
+   // s.text[s.text_cur + strlen(t) + 1] = 0;
+    s.text_cur += strlen(t)+1;
+    return c;
 }
 int player() {
     for (int i = 0; i < SC; i++) {
         if (s.scene[i].is_spawned && s.scene[i].is_controlled) return i;
-        return -1;
     };
+    return -1;
 }
 float hf(float x, float y) {
-
     return 
-        sin(x * sin(y / 2212.)) * sin(len((struct v2) {x,y})/13111.);
+        sin(x * sin(y / 2212.)) * sin(len((struct v2) {x,y})/44.);
 }
 
 void play(int id) {
@@ -56,13 +66,13 @@ void play(int id) {
     printf("%i %f played!\n", id, freq);
     spawn((struct node) { (struct v2) { s.t * 55, (id-21)*3 }, .is_block=1, .sx=6, .c=white });
     s.n = freq;
-    for (int i = 1; i < 5; i++) {
+    for (int i = 1; i < 3; i++) {
         turtle(
             (struct trans) {
             s.t * 55, (id - 21) * 3, 0.
         },
             (struct rule) {
-            "F", "FF+", 8, 12, 'F', i + sin(F / 11.) / 1111.
+            "F", "FF+", 8, 12, 'F', i + sin(F / 11.) / 1111. 
         }, 0);
     }
 }
@@ -104,6 +114,7 @@ int spawn(struct node n) {
     }
     n.is_spawned = 1;
     n.t.z = (rand() % 222)/222.;
+
     s.scene[s.scene_cur % SC] = n;
     int r = s.scene_cur;
     s.scene_cur++;
@@ -136,7 +147,7 @@ void move(int x, int y) {
 
     s.mx = x;
     s.my = y;
-    spawn_r(x,y);
+   // spawn_r(x,y);
     for (int i = 0; i < SC; i++) {
         if (s.scene[i].is_controlled) {
             s.scene[i].rot = line_angle_rad((struct v2) {
@@ -196,7 +207,7 @@ void paint(struct frame f, int id) {
     for (int i = 0; i < f.width * f.height; i++) {
         int y = i / f.width;
         int x = i % f.width;
-        f.pixels[1 % 4 + i * 4] = ((1.+hf(x,y))/2.)*66.;
+        f.pixels[0 % 4 + i * 4] = ((1.+hf(x,y))/2.)*77.;
       //  f.pixels[1 % 4 + i * 4] += (x%11)*3;
 /*        f.pixels[0 + i * 4] = (y%13)*2;
         f.pixels[0 + i * 4] += (y%17)*3;*/
@@ -251,13 +262,30 @@ void paint(struct frame f, int id) {
         }
 
     for (int i = 0; i < SC; i++) {
-        if (!s.scene[i].is_spawned || !s.scene[i].is_controlled) continue;
+        if (!s.scene[i].is_spawned || s.scene[i].type!=Tchar) continue;
 
 #if defined(_WIN32)
-        wtext("playe1r7", s.scene[i].t.x, s.scene[i].t.y, 0, 1);
+        wtext(&s.text[s.scene[i].name], s.scene[i].t.x, s.scene[i].t.y, 0, 1);
 #endif
-
     };
+    if (id == 5) {
+
+        int n = 0;
+        for (int i = 0; i < SC; i++) {
+            if (!s.scene[i].is_spawned) continue;
+            char st[123];
+            sprintf(st, "N%i", i);
+#if defined(_WIN32)
+            wtext(st, 0, f.height-(n*16), 0, 5);
+#endif
+            n++;
+        }
+    }
+#if defined(_WIN32)
+    char st[123];
+    sprintf(st, "T %s %i", s.text, s.text_cur);
+    wtext(st, 0, f.height - 32, 0, 1);
+#endif
 }
 void colors(struct frame f, int id) {
     for (int i = 0; i < f.width * f.height; i++) {
@@ -414,9 +442,7 @@ struct v2 forward(struct v2 p, float angle, float d) {
 }
 
 char* lsys(char* st, char* r, int d) {
-
     if (!d) return st;
-
     char str[12345] = { 0 };
     char c[2]; c[1] = 0;
     int i = 0;
@@ -427,8 +453,8 @@ char* lsys(char* st, char* r, int d) {
     }
     //printf("%s, %i\n", &str, d); 
     return lsys(&str, r, d - 1);
-
 }
+
 void turtle(
     struct trans t, struct rule rule, int depth) {
 
